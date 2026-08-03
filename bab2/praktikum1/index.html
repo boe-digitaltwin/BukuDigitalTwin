@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Sistem Tangki - Nomor 12: Proyek Mini Smart Water Tank</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ NOMOR 12: proyek mini smart water tank ============ -->
+<!-- (a) seluruh komponen nomor 1-11 digabung tanpa diubah strukturnya:
+     tangki, pompa, katup, sensor, pipa, dan indikator tetap berada di
+     dalam .panel-model; yang baru di nomor 12 hanya panel skenario
+     di header dan mesin simulasi di javascript.js -->
+<div class="dashboard" id="dashboard">
+
+  <!-- (b)(c)(d) panel header: judul, tombol skenario, dan waktu pembaruan -->
+  <div class="dashboard-header" id="dashboard-header">
+    <h1>Dashboard Smart Water Tank</h1>
+
+    <div class="scenario-controls" role="group" aria-label="Pilih skenario simulasi data">
+      <button type="button" class="scenario-btn scenario-active" data-scenario="normal">Normal</button>
+      <button type="button" class="scenario-btn" data-scenario="warning">Warning</button>
+      <button type="button" class="scenario-btn" data-scenario="danger">Danger</button>
+      <button type="button" class="scenario-btn" data-scenario="offline">Offline</button>
+    </div>
+
+    <!-- (d) timestamp pembaruan terakhir, terpisah dari log peristiwa
+         supaya pembaca langsung tahu "kapan" tanpa membaca log -->
+    <p id="last-update-text" class="last-update">Pembaruan terakhir: menunggu data...</p>
+  </div>
+
+  <!-- (b) panel utama: model SVG tangki, dibungkus section agar bisa
+       diberi grid-area sendiri dan diskalakan responsif lewat CSS -->
+  <section class="panel-model" id="panel-model" aria-label="Model visual sistem tangki air">
+
+  <svg viewBox="0 0 650 410"
+       xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="Diagram sensor, tangki, katup, dan pompa">
+
+    <defs>
+      <linearGradient id="waterGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#9fdcff"/>
+        <stop offset="100%" stop-color="#4da6ff"/>
+      </linearGradient>
+
+      <radialGradient id="lampGradient">
+        <stop offset="20%" stop-color="#ffff99"/>
+        <stop offset="100%" stop-color="green"/>
+      </radialGradient>
+
+      <line id="sensorNeckLine" x1="0" y1="0" x2="50" y2="0" stroke="#FFFFFF" stroke-width="2"/>
+      <rect id="valvePipeConnector" width="35" height="20" fill="#94A3B8" rx="3"/>
+      <rect id="valveFlange" width="8" height="36" fill="#475569" rx="2"/>
+      <rect id="pumpPipeConnector" width="40" height="20" fill="#94A3B8" rx="3"/>
+      <rect id="pumpFoot" width="20" height="10" rx="2" fill="#1E293B"/>
+
+      <symbol id="sensorSymbol" viewBox="55 10 100 200">
+        <rect x="75" y="20" width="50" height="30" fill="#94A3B8" rx="2"/>
+        <use href="#sensorNeckLine" x="75" y="28"/>
+        <use href="#sensorNeckLine" x="75" y="38"/>
+
+        <rect x="60" y="50" width="80" height="60" rx="8" fill="#1E293B" stroke="#0F172A" stroke-width="2.5"/>
+        <ellipse cx="100" cy="50" rx="40" ry="10" fill="#1E293B"/>
+
+        <rect x="75" y="65" width="50" height="20" rx="3" fill="var(--status-color,#0EA5E9)"/>
+        <text x="100" y="80" font-family="monospace" font-size="11" font-weight="bold" fill="#F0F9FF" text-anchor="middle">LVL: 62%</text>
+
+        <rect x="85" y="110" width="30" height="15" fill="#475569" rx="2"/>
+        <circle cx="100" cy="125" r="15" fill="#475569" stroke="#1E293B" stroke-width="2"/>
+
+        <path d="M 85 145 A 20 20 0 0 0 115 145" fill="none" stroke="var(--status-color,#0EA5E9)" stroke-width="2.5" stroke-dasharray="3,2"/>
+        <path d="M 75 155 A 30 30 0 0 0 125 155" fill="none" stroke="var(--status-color,#0EA5E9)" stroke-width="2" stroke-dasharray="4,3"/>
+        <path d="M 65 165 A 40 40 0 0 0 135 165" fill="none" stroke="var(--status-color,#0EA5E9)" stroke-width="1.5" stroke-dasharray="5,4"/>
+      </symbol>
+
+      <symbol id="valveSymbol" viewBox="10 5 185 130">
+        <use href="#valvePipeConnector" x="15" y="90"/>
+        <use href="#valvePipeConnector" x="150" y="90"/>
+
+        <use href="#valveFlange" x="46" y="82"/>
+        <use href="#valveFlange" x="146" y="82"/>
+
+        <polygon points="54,82 100,100 54,118" fill="#1E293B" stroke="#0F172A" stroke-width="2"/>
+        <polygon points="146,82 100,100 146,118" fill="#1E293B" stroke="#0F172A" stroke-width="2"/>
+
+        <circle cx="100" cy="100" r="7" fill="#2563EB"/>
+        <line x1="100" y1="100" x2="100" y2="45" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
+
+        <g transform="rotate(25 100 45)">
+          <ellipse cx="100" cy="45" rx="32" ry="11" fill="var(--status-fill,#10B981)" stroke="#047857" stroke-width="2.5"/>
+          <ellipse cx="100" cy="45" rx="20" ry="6" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.8"/>
+          <line x1="100" y1="34" x2="100" y2="56" stroke="#FFFFFF" stroke-width="2"/>
+          <line x1="68" y1="45" x2="132" y2="45" stroke="#FFFFFF" stroke-width="2"/>
+        </g>
+      </symbol>
+
+      <symbol id="pumpSymbol" viewBox="10 65 185 100">
+        <use href="#pumpPipeConnector" x="15" y="105"/>
+        <use href="#pumpPipeConnector" x="145" y="75"/>
+
+        <rect x="50" y="80" width="100" height="70" rx="8" fill="#475569" stroke="#1E293B" stroke-width="2.5"/>
+        <rect x="60" y="68" width="80" height="14" rx="3" fill="#1E293B"/>
+
+        <circle cx="80" cy="115" r="35" fill="var(--status-fill,#059669)" stroke="#047857" stroke-width="3"/>
+        <circle cx="80" cy="115" r="20" fill="#047857"/>
+
+        <g class="pump-impeller">
+          <line x1="80" y1="115" x2="80" y2="99" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+          <line x1="80" y1="115" x2="94" y2="123" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+          <line x1="80" y1="115" x2="66" y2="123" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="80" cy="115" r="4" fill="#FFFFFF"/>
+        </g>
+
+        <use href="#pumpFoot" x="65" y="142"/>
+        <use href="#pumpFoot" x="115" y="142"/>
+      </symbol>
+    </defs>
+
+    <!-- NOMOR 10 (a/d): id ditambahkan agar bisa diperbarui dari applyTelemetry -->
+    <text id="status-banner" x="350" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="url(#lampGradient)">NORMAL</text>
+
+    <use href="#sensorSymbol" id="instance-sensor-01"
+         x="154" y="36" width="58" height="115" class="status-normal"/>
+
+    <rect x="100" y="110" width="160" height="180" fill="none" stroke="black" stroke-width="2"/>
+    <rect id="water-level" class="water-level" x="102" y="205" width="156" height="83" fill="url(#waterGradient)"/>
+
+    <line x1="260" y1="205" x2="304" y2="205" stroke="gray" stroke-width="8"/>
+
+    <use href="#valveSymbol" id="instance-valve-01"
+         x="292" y="154" width="99" height="69" class="status-warning"/>
+
+    <line x1="376" y1="205" x2="450" y2="205" stroke="gray" stroke-width="8"/>
+
+    <!-- Grup pompa: interaktif lewat mouse & keyboard (nomor 9) -->
+    <use href="#pumpSymbol" id="instance-pump-01"
+         x="438" y="180" width="93" height="50" class="status-critical"
+         tabindex="0" role="button" aria-label="Pompa: mati"/>
+
+    <!-- NOMOR 10 (a/d): label level baru di luar <symbol>, karena konten <use>
+         tidak bisa disasar getElementById per-instance -->
+    <text id="level-label" x="180" y="308" text-anchor="middle"
+          font-size="12" font-family="monospace" fill="#334155">Level: -- % • Quality: --</text>
+
+    <text x="180" y="335" text-anchor="middle" font-size="18">Tangki</text>
+
+    <g id="toggle-button" tabindex="0" role="button" aria-label="Nyalakan atau matikan pompa" style="cursor:pointer;">
+      <rect x="495" y="8" width="140" height="34" rx="6" fill="#1E293B"/>
+      <text id="toggle-label" x="565" y="30" text-anchor="middle" font-size="13" fill="#F0F9FF" font-family="sans-serif">Nyalakan Pompa</text>
+    </g>
+
+    <g id="log-panel">
+      <rect x="20" y="355" width="610" height="38" rx="6" fill="#F1F5F9" stroke="#CBD5E1"/>
+      <text id="log-text" x="30" y="378" font-size="13" font-family="monospace" fill="#334155">Log: menunggu aksi pengguna...</text>
+    </g>
+  </svg>
+
+  </section>
+  <!-- akhir panel-model -->
+
+  <!-- (c) empat kartu data: masing-masing tabindex="0" agar bisa
+       ditelusuri lewat Tab, konsisten dengan urutan fokus grup pompa
+       di nomor 9 -->
+  <section class="card" id="card-level" tabindex="0" aria-label="Kartu level air">
+    <h3 class="card-title">Level Air</h3>
+    <p class="card-value" id="card-level-value">-- %</p>
+    <p class="card-trend" id="card-level-trend">Tren: --</p>
+  </section>
+
+  <section class="card" id="card-status" tabindex="0" aria-label="Kartu status sistem">
+    <h3 class="card-title">Status</h3>
+    <p class="card-value" id="card-status-value">--</p>
+  </section>
+
+  <section class="card" id="card-quality" tabindex="0" aria-label="Kartu kualitas data">
+    <h3 class="card-title">Kualitas Data</h3>
+    <p class="card-value" id="card-quality-value">--</p>
+  </section>
+
+  <section class="card" id="card-pump" tabindex="0" aria-label="Kartu status pompa">
+    <h3 class="card-title">Pompa</h3>
+    <p class="card-value" id="card-pump-value">Mati</p>
+  </section>
+
+  <!-- (c) satu panel alarm, role="alert" + aria-live supaya perubahan
+       status terbaca otomatis oleh pembaca layar -->
+  <section class="panel-alarm" id="panel-alarm" role="alert" aria-live="polite" tabindex="0">
+    <h3 class="alarm-title">Alarm</h3>
+    <p id="alarm-text">Tidak ada alarm aktif.</p>
+  </section>
+
+</div>
+<!-- akhir .dashboard -->
+
+  <script src="javascript.js"></script>
+</body>
+</html>
