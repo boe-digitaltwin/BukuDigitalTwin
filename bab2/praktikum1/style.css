@@ -1,0 +1,263 @@
+/* ============ NOMOR 7: class status ============ */
+.status-normal   { --status-color:#0EA5E9; --status-fill:#10B981; }
+.status-warning  { --status-color:#F59E0B; --status-fill:#F59E0B; }
+.status-critical { --status-color:#EF4444; --status-fill:#EF4444; }
+
+/* ============ NOMOR 8 ============ */
+/* (b) transisi perubahan level air.                                   */
+/* Dipakai transform:scaleY() (bukan mengubah y/height langsung)      */
+/* dengan transform-origin di titik DASAR air (180px, 288px) --       */
+/* jadi air hanya bisa menyusut ke arah dalam kotak aslinya sendiri,  */
+/* mustahil melebihi ukuran awal / keluar dari tangki.                */
+.water-level {
+  transform-box: view-box;
+  transform-origin: 180px 288px;
+  transition: transform 1s ease-in-out;
+}
+.water-level.level-low {
+  transform: scaleY(0.46); /* tinggi efektif turun dari 83 -> ~38 */
+}
+
+/* (c) keyframes rotasi impeller pompa */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* (d) animasi aktif hanya saat class pump-running dipasang */
+.pump-impeller {
+  transform-box: view-box;
+  transform-origin: 80px 115px;
+  animation: spin 1.2s linear infinite;
+  animation-play-state: var(--pump-state, paused);
+}
+.pump-running { --pump-state: running; }
+
+/* (e) hormati preferensi pengguna yang sensitif gerak */
+@media (prefers-reduced-motion: reduce) {
+  .pump-impeller { animation: none; }
+  .water-level   { transition: none; }
+}
+
+/* ============ NOMOR 9 ============ */
+/* (a) indikator visual saat grup pompa menerima fokus keyboard (Tab) */
+#instance-pump-01 { cursor: pointer; }
+#instance-pump-01:focus,
+#toggle-button:focus {
+  outline: 3px solid #38BDF8;
+  outline-offset: 3px;
+}
+
+/* ============ NOMOR 11: dashboard responsif ============ */
+
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  background: #F1F5F9;
+  /* pusatkan .dashboard secara horizontal di semua ukuran layar,
+     termasuk saat layar jauh lebih lebar dari max-width dashboard */
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+  box-sizing: border-box;
+}
+
+/* (a) layout utama memakai CSS Grid: 3 kolom di desktop,
+   panel model mengambil 2 bagian lebar, dua kartu di kanannya */
+.dashboard {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-areas:
+    "header  header  header"
+    "model   level   status"
+    "model   quality pump"
+    "alarm   alarm   alarm";
+  gap: 16px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;   /* cadangan jika suatu saat flex pada body dilepas */
+}
+
+.dashboard-header {
+  grid-area: header;
+  text-align: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #E2E8F0;
+}
+.dashboard-header h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  color: #1E293B;
+}
+
+/* (b) panel model: SVG mengisi penuh lebar panel & menjaga rasio lewat viewBox */
+.panel-model {
+  grid-area: model;
+  min-width: 0;           /* cegah grid item memaksa kolom melebar karena svg */
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.panel-model svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* (c) empat kartu data: default kotak putih + border tipis */
+.card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-height: 44px;        /* (e) ukuran minimum area sentuh/fokus */
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.card:hover {
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.10);
+  transform: translateY(-1px);
+}
+#card-level   { grid-area: level; }
+#card-status  { grid-area: status; }
+#card-quality { grid-area: quality; }
+#card-pump    { grid-area: pump; }
+
+.card-title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.card-value {
+  margin: 0;
+  font-size: 22px;
+  font-weight: bold;
+  color: #1E293B;
+}
+.card-trend {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748B;
+}
+
+/* (c) panel alarm: warna dasar "aman", berubah lewat class dari JavaScript */
+.panel-alarm {
+  grid-area: alarm;
+  padding: 14px 16px;
+  border-radius: 10px;
+  min-height: 44px;
+  background: #ECFDF5;
+  border: 1px solid #10B981;
+  color: #065F46;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.panel-alarm .alarm-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.panel-alarm p#alarm-text {
+  margin: 0;
+  font-weight: bold;
+}
+.panel-alarm.alarm-warning {
+  background: #FFFBEB;
+  border-color: #F59E0B;
+  color: #92400E;
+}
+.panel-alarm.alarm-critical {
+  background: #FEF2F2;
+  border-color: #EF4444;
+  color: #991B1B;
+}
+
+/* (e) kartu & panel alarm ikut pola indikator fokus yang sama seperti nomor 9,
+   supaya urutan fokus (Tab) terlihat jelas di seluruh dashboard */
+.card:focus,
+.panel-alarm:focus {
+  outline: 3px solid #38BDF8;
+  outline-offset: 3px;
+}
+
+/* (d) di bawah 768px: satu kolom, panel model di atas, kartu ditumpuk,
+   alarm tetap paling bawah agar mudah dibaca di layar sempit */
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "model"
+      "level"
+      "status"
+      "quality"
+      "pump"
+      "alarm";
+    gap: 12px;
+  }
+  body { padding: 16px 12px; }
+  .card-value { font-size: 20px; }
+}
+
+/* ============ NOMOR 12: proyek mini smart water tank ============ */
+
+/* (d) status offline: warna abu-abu netral, sejajar dengan
+   status-normal/warning/critical yang sudah ada sejak nomor 7 */
+.status-offline { --status-color:#94A3B8; --status-fill:#94A3B8; }
+
+/* (c) panel alarm saat offline: netral, bukan "aman" (hijau) dan
+   bukan "bahaya" (merah), supaya tidak menyesatkan pembaca dashboard */
+.panel-alarm.alarm-offline {
+  background: #F1F5F9;
+  border-color: #94A3B8;
+  color: #334155;
+}
+
+/* (b) baris tombol skenario, dibungkus role="group" di HTML */
+.scenario-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.scenario-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 44px;      /* (e-nomor 11) tetap jaga ukuran minimum area sentuh */
+  border-radius: 8px;
+  border: 1px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #334155;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.scenario-btn:hover { background: #F1F5F9; }
+.scenario-btn:focus {
+  outline: 3px solid #38BDF8; /* pola fokus yang sama seperti elemen lain */
+  outline-offset: 2px;
+}
+
+/* Warna tiap tombol mengikuti warna status yang sudah dikenal pembaca
+   dari kartu Status dan panel alarm, supaya konsisten secara visual */
+.scenario-btn[data-scenario="normal"].scenario-active  { background:#0EA5E9; border-color:#0284C7; color:#FFFFFF; }
+.scenario-btn[data-scenario="warning"].scenario-active { background:#F59E0B; border-color:#B45309; color:#FFFFFF; }
+.scenario-btn[data-scenario="danger"].scenario-active  { background:#EF4444; border-color:#B91C1C; color:#FFFFFF; }
+.scenario-btn[data-scenario="offline"].scenario-active { background:#94A3B8; border-color:#64748B; color:#FFFFFF; }
+
+/* (d) teks waktu pembaruan terakhir */
+.last-update {
+  margin: 0;
+  font-size: 12px;
+  color: #64748B;
+  font-family: monospace;
+}
