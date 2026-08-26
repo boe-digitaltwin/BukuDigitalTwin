@@ -1,1 +1,251 @@
+// ============================================================
+// app.js — dashboard Smart Water Tank
+// VERSI TERHUBUNG KE main.py (bukan lagi simulator/skenario).
+//
+// PERUBAHAN pada versi ini:
+//  - Tombol pompa di dalam SVG (id="toggle-button") DIHAPUS dari
+//    index.html, jadi semua kode yang mencari elemen itu juga
+//    dihapus di sini. Kontrol pompa sekarang cuma lewat sidebar
+//    ("sidebar-pump-btn") dan lewat ikon pompa di diagram.
+//  - Diperbaiki: sebelumnya "status" (normal/warning/critical)
+//    bisa tampil tidak nyambung dengan "quality" (good/bad) --
+//    misalnya badge bilang "NORMAL" padahal data sudah basi/​tidak
+//    valid, sehingga quality-nya "bad". Sekarang kalau data basi
+//    atau tidak valid, status DIPAKSA jadi "offline" juga, supaya
+//    badge status dan info quality selalu konsisten.
+//  - BARU: togglePump() sekarang benar-benar memanggil endpoint
+//    /api/pump/on dan /api/pump/off di main.py, sehingga tombol
+//    pompa mengendalikan relay fisik di GPIO25, bukan cuma
+//    animasi di browser seperti sebelumnya.
+// ============================================================
 
+function togglePump() {
+  var pump  = document.getElementById('instance-pump-01');
+  var water = document.getElementById('water-level');
+  var log   = document.getElementById('log-text');
+
+  var running  = !pump.classList.contains('pump-running');
+  var endpoint = running ? '/api/pump/on' : '/api/pump/off';
+
+  fetch(endpoint, { cache: 'no-store' })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function () {
+      // Tampilan baru diperbarui SETELAH ESP32 membalas sukses,
+      // supaya ikon pompa di layar selalu mencerminkan kondisi
+      // relay yang sesungguhnya, bukan sekadar asumsi klik.
+      pump.classList.toggle('pump-running', running);
+      water.classList.toggle('level-low', running);
+      pump.setAttribute('aria-label', running ? 'Pompa: menyala' : 'Pompa: mati');
+
+      var waktu = new Date().toLocaleTimeString();
+      log.textContent = 'Log [' + waktu + ']: Pompa ' + (running ? 'dinyalakan' : 'dimatikan');
+
+      updatePumpCard(running);
+    })
+    .catch(function (err) {
+      log.textContent = 'Log: gagal mengirim perintah pompa (' + err.message + ')';
+    });
+}
+
+function handlePumpKeydown(event) {
+  if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    togglePump();
+  }
+}
+
+// pasang event ke kontrol pompa: ikon pompa di diagram SVG,
+// dan tombol di sidebar. (Tombol duplikat di dalam SVG sudah dihapus.)
+var pumpEl = document.getElementById('instance-pump-01');
+pumpEl.addEventListener('click', function () {
+  pumpEl.focus();
+  togglePump();
+});
+pumpEl.addEventListener('keydown', handlePumpKeydown);
+
+var sidebarPumpBtn = document.getElementById('sidebar-pump-btn');
+sidebarPumpBtn.addEventListener('click', togglePump);
+
+// ============ pemetaan data sensor ke visual ============
+const TANK_TOP    = 90;
+const TANK_BOTTOM = 390;
+const TANK_HEIGHT = TANK_BOTTOM - TANK_TOP;
+const STALE_MS    = 60 * 1000; // data dianggap basi jika > 60 detik
+
+function statusColor(status) {
+  if (status === 'critical') return '#EF4444';
+  if (status === 'warning')  return '#F59E0B';
+  if (status === 'offline')  return '#94A3B8';
+  return '#0EA5E9';
+}
+
+// applyTelemetry menerima objek JSON: { level, status, quality, timestamp }
+// -- skema ini PERSIS sama dengan yang dikirim main.py lewat /api/stream.
+function applyTelemetry(data) {
+  var waterEl  = document.getElementById('water-level');
+  var sensorEl = document.getElementById('instance-sensor-01');
+  var labelEl  = document.getElementById('level-label');
+  var lvlMiniEl = document.getElementById('sensor-lvl-label');
+  var topbarStatusEl = document.getElementById('topbar-status');
+  var logEl    = document.getElementById('log-text');
+
+  var rawLevel  = data && data.level;
+  var status    = (data && data.status) || 'normal';
+  var timestamp = data && data.timestamp;
+
+  var isNumber        = typeof rawLevel === 'number' && !isNaN(rawLevel);
+  var level           = isNumber ? Math.min(100, Math.max(0, rawLevel)) : 0;
+  var levelOutOfRange  = isNumber && (rawLevel < 0 || rawLevel > 100);
+
+  var age     = timestamp ? (Date.now() - new Date(timestamp).getTime()) : Infinity;
+  var isStale = !timestamp || isNaN(age) || age > STALE_MS;
+  var quality = (data && data.quality) || 'good';
+  if (!isNumber || isStale) quality = 'bad';
+  else if (levelOutOfRange) quality = 'warning';
+
+  // Jaga konsistensi: kalau kualitas data "bad" (basi/tidak valid),
+  // status tidak boleh tetap tampil "normal" -- paksa jadi "offline"
+  // supaya badge di navbar tidak menyesatkan.
+  if (!isNumber || isStale) status = 'offline';
+
+  var height = (level / 100) * TANK_HEIGHT;
+  var y      = TANK_BOTTOM - height;
+
+  waterEl.classList.remove('level-low');
+  waterEl.setAttribute('y', y.toFixed(1));
+  waterEl.setAttribute('height', height.toFixed(1));
+
+  labelEl.textContent = 'Level: ' + Math.round(level) + '% \u2022 Quality: ' + quality;
+  if (lvlMiniEl) lvlMiniEl.textContent = 'LVL: ' + Math.round(level) + '%';
+
+  sensorEl.classList.remove('status-normal', 'status-warning', 'status-critical', 'status-offline');
+  sensorEl.classList.add('status-' + status);
+
+  topbarStatusEl.textContent = status.toUpperCase();
+  topbarStatusEl.classList.remove('st-normal', 'st-warning', 'st-critical', 'st-offline');
+  topbarStatusEl.classList.add('st-' + status);
+
+  var waktu = new Date().toLocaleTimeString();
+  logEl.textContent = 'Log [' + waktu + ']: telemetry level=' +
+    (isNumber ? rawLevel : 'null') + ', status=' + status + ', quality=' + quality;
+
+  var result = { level: level, status: status, quality: quality, stale: isStale };
+  updateDashboardCards(result);
+  updateLastUpdateText(timestamp, isStale);
+
+  return result;
+}
+
+var previousLevel = null;
+
+function updateDashboardCards(result) {
+  var levelValueEl   = document.getElementById('card-level-value');
+  var levelTrendEl   = document.getElementById('card-level-trend');
+  var statusValueEl  = document.getElementById('card-status-value');
+  var qualityValueEl = document.getElementById('card-quality-value');
+  var alarmEl        = document.getElementById('panel-alarm');
+  var alarmTextEl    = document.getElementById('alarm-text');
+
+  levelValueEl.textContent = Math.round(result.level) + ' %';
+
+  var trendText = 'Tren: --';
+  if (previousLevel !== null) {
+    if (result.level > previousLevel)      trendText = 'Tren: \u2191 naik';
+    else if (result.level < previousLevel) trendText = 'Tren: \u2193 turun';
+    else                                    trendText = 'Tren: \u2192 stabil';
+  }
+  levelTrendEl.textContent = trendText;
+  previousLevel = result.level;
+
+  statusValueEl.textContent = result.status.toUpperCase();
+  // hook warna sesuai class di style.css (#card-status-value.status-*-text)
+  statusValueEl.classList.remove('status-warning-text', 'status-critical-text', 'status-offline-text');
+  if (result.status === 'warning')  statusValueEl.classList.add('status-warning-text');
+  if (result.status === 'critical') statusValueEl.classList.add('status-critical-text');
+  if (result.status === 'offline')  statusValueEl.classList.add('status-offline-text');
+
+  qualityValueEl.textContent = result.quality + (result.stale ? ' (basi)' : '');
+
+  alarmEl.classList.remove('alarm-warning', 'alarm-critical', 'alarm-offline');
+  if (result.status === 'critical') {
+    alarmEl.classList.add('alarm-critical');
+    alarmTextEl.textContent = 'ALARM: level kritis, segera periksa sistem.';
+  } else if (result.status === 'warning') {
+    alarmEl.classList.add('alarm-warning');
+    alarmTextEl.textContent = 'Peringatan: kondisi mendekati ambang batas.';
+  } else if (result.status === 'offline') {
+    alarmEl.classList.add('alarm-offline');
+    alarmTextEl.textContent = 'Tidak ada data dari sensor. Periksa koneksi (offline).';
+  } else {
+    alarmTextEl.textContent = 'Tidak ada alarm aktif.';
+  }
+}
+
+function updatePumpCard(running) {
+  var pumpValueEl = document.getElementById('card-pump-value');
+  pumpValueEl.textContent = running ? 'Menyala' : 'Mati';
+  pumpValueEl.classList.remove('pump-on', 'pump-off');
+  pumpValueEl.classList.add(running ? 'pump-on' : 'pump-off');
+}
+
+function updateLastUpdateText(timestamp, stale) {
+  var el = document.getElementById('last-update-text');
+  if (!timestamp) {
+    el.textContent = 'Pembaruan terakhir: belum ada data masuk';
+    return;
+  }
+  var waktu = new Date(timestamp).toLocaleTimeString();
+  el.textContent = 'Pembaruan terakhir: ' + waktu + (stale ? ' (data basi)' : '');
+}
+
+// ============ KONEKSI KE main.py ============
+// Polling biasa: request singkat ke "/api/telemetry" setiap
+// POLL_INTERVAL_MS, lalu koneksi langsung ditutup (sesuai header
+// "Connection: close" di main.py). Ini lebih tahan banting untuk
+// board single-thread seperti ESP32/MicroPython dibanding SSE
+// jangka panjang.
+
+const POLL_INTERVAL_MS = 700; // sedikit di atas SENSOR_INTERVAL_MS di main.py (300ms)
+
+var lastGoodTimestamp = null;
+var lastGoodLevel     = 0;
+var pollTimer         = null;
+
+function pollSensor() {
+  fetch('/api/telemetry', { cache: 'no-store' })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && typeof data.level === 'number') {
+        lastGoodLevel = data.level;
+        lastGoodTimestamp = data.timestamp;
+      }
+      applyTelemetry(data);
+    })
+    .catch(function (err) {
+      // Gagal terhubung ke ESP32 (mis. main.py belum jalan, WiFi
+      // lepas, atau board sedang restart). Tampilkan offline
+      // memakai data valid terakhir, JANGAN reset ke 0.
+      applyTelemetry({
+        level: lastGoodLevel,
+        status: 'offline',
+        quality: 'bad',
+        timestamp: lastGoodTimestamp
+      });
+      document.getElementById('log-text').textContent =
+        'Log: gagal terhubung ke ESP32 (' + err.message + '), mencoba lagi...';
+    });
+}
+
+function connectToSensor() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollSensor();
+  pollTimer = setInterval(pollSensor, POLL_INTERVAL_MS);
+}
+
+connectToSensor();
